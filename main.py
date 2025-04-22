@@ -1,8 +1,14 @@
 import pandas as pd
 import streamlit as st
 import numpy as np
-from wordnet import wordnet
+import nltk
+from nltk.corpus import wordnet
 
+try:
+    wordnet.synsets('test')
+except LookupError:
+    nltk.download('wordnet')
+    
 # Set page config for app
 st.set_page_config(
     page_title="Mood-based Movie Recommender",

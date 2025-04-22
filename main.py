@@ -15,7 +15,7 @@ st.set_page_config(
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('movie_sentiment_summary.csv')
+        df = pd.read_csv('Demo2.csv')
         # Convert string representation of lists to actual lists
         df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
         return df

@@ -411,6 +411,7 @@ if df is not None:
                     st.markdown(f"### {row['movie_name']}")
                     st.markdown(f"**Genres:** {row['genres']}")
                     st.markdown(f"**Emotion:** {row['emotion']}")
+                    st.markdown(f"**Match:** {row['accuracy']}") 
                 
                 with col2:
                     st.metric("Rating", f"{row['avg_rating']}/5")

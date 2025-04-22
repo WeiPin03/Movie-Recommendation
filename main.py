@@ -1,47 +1,31 @@
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
-from ast import literal_eval
+import numpy as np
+from wordnet import wordnet
 
-# Set page title and configuration
+# Set page config for app
 st.set_page_config(
-    page_title="Movie Recommendation System",
+    page_title="Mood-based Movie Recommender",
     page_icon="🎬",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Load the dataset
+# Load the preprocessed data
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv("movie_sentiment_summary.csv")
+        df = pd.read_csv('movie_sentiment_summary.csv')
         # Convert string representation of lists to actual lists
-        if isinstance(df['genres'].iloc[0], str):
-            try:
-                df['genres_processed'] = df['genres'].apply(literal_eval)
-            except:
-                # If literal_eval fails, create a simplified version
-                df['genres_processed'] = df['genres'].apply(
-                    lambda x: [g.strip().replace("'", "") for g in str(x).replace('[', '').replace(']', '').split(',')]
-                )
-        else:
-            df['genres_processed'] = df['genres']
+        df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
         return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        # Create a sample dataframe to avoid errors
-        return pd.DataFrame({
-            'movie_name': ['Sample Movie'],
-            'avg_rating': [4.5],
-            'avg_sentiment_score': [4.0],
-            'genres': ["['Drama']"],
-            'genres_processed': [['Drama']],
-            'emotion': ['joy']
-        })
+    except:
+        st.error("Failed to load data. Please make sure 'movie_sentiment_summary.csv' is in the same directory as this app.")
+        return None
 
 # Function to find similar words
-def find_similar_words(word, all_emotions, all_genres):
-    """Find similar words to the input using pre-defined mappings"""
+def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
+    """Find similar words to the input using pre-defined mappings and WordNet"""
     word = word.lower().strip()
     
     # Direct matches
@@ -55,103 +39,51 @@ def find_similar_words(word, all_emotions, all_genres):
     # Comprehensive emotion mapping
     emotion_mapping = {
         # Joy related
-        'funny': 'joy',
-        'hilarious': 'joy',
-        'happy': 'joy',
-        'comedy': 'joy',
-        'humorous': 'joy',
-        'heartwarming': 'joy',
-        'uplifting': 'joy',
-        'romantic': 'joy',
-        'romcom': 'joy',
-        'pleasant': 'joy',
-        'delightful': 'joy',
-        'cheerful': 'joy',
-        'amusing': 'joy',
-        'lighthearted': 'joy',
-        'laughter': 'joy',
+        'funny': 'joy', 'hilarious': 'joy', 'happy': 'joy', 'comedy': 'joy',
+        'humorous': 'joy', 'heartwarming': 'joy', 'uplifting': 'joy',
+        'romantic': 'joy', 'romcom': 'joy', 'pleasant': 'joy',
+        'delightful': 'joy', 'cheerful': 'joy', 'amusing': 'joy',
+        'lighthearted': 'joy', 'laughter': 'joy',
         
         # Sadness related
-        'sad': 'sadness',
-        'depressing': 'sadness',
-        'heartbreaking': 'sadness',
-        'melancholy': 'sadness',
-        'tragic': 'sadness',
-        'gloomy': 'sadness',
-        'tearful': 'sadness',
-        'sorrowful': 'sadness',
-        'grief': 'sadness',
-        'weeping': 'sadness',
-        'somber': 'sadness',
-        'crying': 'sadness',
+        'sad': 'sadness', 'depressing': 'sadness', 'heartbreaking': 'sadness',
+        'melancholy': 'sadness', 'tragic': 'sadness', 'gloomy': 'sadness',
+        'tearful': 'sadness', 'sorrowful': 'sadness', 'grief': 'sadness',
+        'weeping': 'sadness', 'somber': 'sadness', 'crying': 'sadness',
         
         # Fear related
-        'scary': 'fear',
-        'terrifying': 'fear',
-        'frightening': 'fear',
-        'horror': 'fear',
-        'creepy': 'fear',
-        'spooky': 'fear',
-        'chilling': 'fear',
-        'eerie': 'fear',
-        'horrific': 'fear',
-        'tense': 'fear',
-        'dread': 'fear',
-        'phobia': 'fear',
-        'panic': 'fear',
+        'scary': 'fear', 'terrifying': 'fear', 'frightening': 'fear',
+        'horror': 'fear', 'creepy': 'fear', 'spooky': 'fear',
+        'chilling': 'fear', 'eerie': 'fear', 'horrific': 'fear',
+        'tense': 'fear', 'dread': 'fear', 'phobia': 'fear', 'panic': 'fear',
         
         # Anticipation related
-        'exciting': 'anticipation',
-        'suspenseful': 'anticipation',
-        'thrilling': 'anticipation',
-        'adventure': 'anticipation',
-        'action-packed': 'anticipation',
-        'gripping': 'anticipation',
-        'intriguing': 'anticipation',
-        'mysterious': 'anticipation',
-        'expectation': 'anticipation',
-        'awaiting': 'anticipation',
+        'exciting': 'anticipation', 'suspenseful': 'anticipation',
+        'thrilling': 'anticipation', 'adventure': 'anticipation',
+        'action-packed': 'anticipation', 'gripping': 'anticipation',
+        'intriguing': 'anticipation', 'mysterious': 'anticipation',
+        'expectation': 'anticipation', 'awaiting': 'anticipation',
         'suspense': 'anticipation',
         
         # Anger related
-        'angry': 'anger',
-        'rage': 'anger',
-        'violent': 'anger',
-        'furious': 'anger',
-        'intense': 'anger',
-        'brutal': 'anger',
-        'outraged': 'anger',
-        'vengeance': 'anger',
-        'wrath': 'anger',
+        'angry': 'anger', 'rage': 'anger', 'violent': 'anger',
+        'furious': 'anger', 'intense': 'anger', 'brutal': 'anger',
+        'outraged': 'anger', 'vengeance': 'anger', 'wrath': 'anger',
         'hostility': 'anger',
         
         # Surprise related
-        'surprising': 'surprise',
-        'unexpected': 'surprise',
-        'shocking': 'surprise',
-        'twist': 'surprise',
-        'unpredictable': 'surprise',
-        'astonishing': 'surprise',
-        'amazing': 'surprise',
-        'startling': 'surprise',
+        'surprising': 'surprise', 'unexpected': 'surprise',
+        'shocking': 'surprise', 'twist': 'surprise', 'unpredictable': 'surprise',
+        'astonishing': 'surprise', 'amazing': 'surprise', 'startling': 'surprise',
         
         # Optimism related
-        'optimistic': 'optimism',
-        'hopeful': 'optimism',
-        'inspiring': 'optimism',
-        'positive': 'optimism',
-        'motivational': 'optimism',
-        'encouraging': 'optimism',
+        'optimistic': 'optimism', 'hopeful': 'optimism', 'inspiring': 'optimism',
+        'positive': 'optimism', 'motivational': 'optimism', 'encouraging': 'optimism',
         
         # Disgust related
-        'disgusting': 'disgust',
-        'gross': 'disgust',
-        'revolting': 'disgust',
-        'offensive': 'disgust',
-        'repulsive': 'disgust',
-        'nauseating': 'disgust',
-        'distasteful': 'disgust',
-        'vile': 'disgust'
+        'disgusting': 'disgust', 'gross': 'disgust', 'revolting': 'disgust',
+        'offensive': 'disgust', 'repulsive': 'disgust', 'nauseating': 'disgust',
+        'distasteful': 'disgust', 'vile': 'disgust'
     }
     
     # Check if word is in emotion mapping
@@ -161,93 +93,105 @@ def find_similar_words(word, all_emotions, all_genres):
     # Genre-specific mapping
     genre_mapping = {
         # Action related
-        'action': 'Action',
-        'fight': 'Action',
-        'explosion': 'Action',
-        'martial arts': 'Action',
-        'superhero': 'Action',
-        'stunt': 'Action',
+        'action': 'Action', 'fight': 'Action', 'explosion': 'Action',
+        'martial arts': 'Action', 'superhero': 'Action', 'stunt': 'Action',
         
         # Comedy related
-        'comedy': 'Comedy',
-        'funny': 'Comedy',
-        'laugh': 'Comedy',
-        'humorous': 'Comedy',
-        'sitcom': 'Comedy',
+        'comedy': 'Comedy', 'funny': 'Comedy', 'laugh': 'Comedy',
+        'humorous': 'Comedy', 'sitcom': 'Comedy',
         
         # Drama related
-        'drama': 'Drama',
-        'emotional': 'Drama',
-        'serious': 'Drama',
+        'drama': 'Drama', 'emotional': 'Drama', 'serious': 'Drama',
         'character-driven': 'Drama',
         
         # Horror related
-        'horror': 'Horror',
-        'scary': 'Horror',
-        'terror': 'Horror',
-        'nightmare': 'Horror',
-        'monster': 'Horror',
-        'slasher': 'Horror',
+        'horror': 'Horror', 'scary': 'Horror', 'terror': 'Horror',
+        'nightmare': 'Horror', 'monster': 'Horror', 'slasher': 'Horror',
         
         # Romance related
-        'romance': 'Romance',
-        'love': 'Romance',
-        'romantic': 'Romance',
-        'relationship': 'Romance',
-        'dating': 'Romance',
+        'romance': 'Romance', 'love': 'Romance', 'romantic': 'Romance',
+        'relationship': 'Romance', 'dating': 'Romance',
         
         # Thriller related
-        'thriller': 'Thriller',
-        'suspense': 'Thriller',
-        'tense': 'Thriller',
-        'mystery': 'Thriller',
-        'crime': 'Thriller',
+        'thriller': 'Thriller', 'suspense': 'Thriller', 'tense': 'Thriller',
+        'mystery': 'Thriller', 'crime': 'Thriller',
         
         # Sci-Fi related
-        'sci-fi': 'Science Fiction',
-        'scifi': 'Science Fiction',
-        'science fiction': 'Science Fiction',
-        'futuristic': 'Science Fiction',
-        'space': 'Science Fiction',
-        'alien': 'Science Fiction',
+        'sci-fi': 'Science Fiction', 'scifi': 'Science Fiction',
+        'science fiction': 'Science Fiction', 'futuristic': 'Science Fiction',
+        'space': 'Science Fiction', 'alien': 'Science Fiction',
         'dystopian': 'Science Fiction',
         
         # Fantasy related
-        'fantasy': 'Fantasy',
-        'magical': 'Fantasy',
-        'mythical': 'Fantasy',
-        'dragon': 'Fantasy',
-        'wizard': 'Fantasy',
-        'fairy tale': 'Fantasy',
+        'fantasy': 'Fantasy', 'magical': 'Fantasy', 'mythical': 'Fantasy',
+        'dragon': 'Fantasy', 'wizard': 'Fantasy', 'fairy tale': 'Fantasy',
         
         # Documentary related
-        'documentary': 'Documentary',
-        'real life': 'Documentary',
-        'educational': 'Documentary',
-        'factual': 'Documentary',
+        'documentary': 'Documentary', 'real life': 'Documentary',
+        'educational': 'Documentary', 'factual': 'Documentary',
         
         # Animation related
-        'animation': 'Animation',
-        'animated': 'Animation',
-        'cartoon': 'Animation',
-        'anime': 'Animation',
+        'animation': 'Animation', 'animated': 'Animation',
+        'cartoon': 'Animation', 'anime': 'Animation',
         
         # Adventure related
-        'adventure': 'Adventure',
-        'quest': 'Adventure',
-        'journey': 'Adventure',
-        'exploration': 'Adventure',
-        'treasure': 'Adventure'
+        'adventure': 'Adventure', 'quest': 'Adventure', 'journey': 'Adventure',
+        'exploration': 'Adventure', 'treasure': 'Adventure'
     }
      
     # Check if word is in genre mapping
-    if word in genre_mapping:
+    if word in genre_mapping and genre_mapping[word] in all_genres:
         return {'type': 'genre', 'word': genre_mapping[word]}
     
     # Multi-word genres (like "Science Fiction")
     for term, genre in genre_mapping.items():
         if ' ' in term and term in word:
+            if genre in all_genres:
+                return {'type': 'genre', 'word': genre}
+                
+    # Check for partial matches in genres and emotions
+    for genre in all_genres:
+        if word in genre.lower() or genre.lower() in word:
             return {'type': 'genre', 'word': genre}
+    
+    for emotion in all_emotions:
+        if word in emotion.lower() or emotion.lower() in emotion:
+            return {'type': 'emotion', 'word': emotion}
+   
+    # Try WordNet for synonyms
+    synonyms = set()
+    for syn in wordnet.synsets(word):
+        for lemma in syn.lemmas():
+            synonyms.add(lemma.name().lower())
+    
+    # Check if any synonym is in our mappings
+    for synonym in synonyms:
+        if synonym in emotion_mapping and emotion_mapping[synonym] in all_emotions:
+            return {'type': 'emotion', 'word': emotion_mapping[synonym]}
+            
+        if synonym in genre_mapping and genre_mapping[synonym] in all_genres:
+            return {'type': 'genre', 'word': genre_mapping[synonym]}
+    
+    # Check for synonyms matching emotions directly
+    for synonym in synonyms:
+        if synonym in all_emotions:
+            return {'type': 'emotion', 'word': synonym}
+    
+    # Check for synonyms matching genres directly
+    for synonym in synonyms:
+        if synonym in [g.lower() for g in all_genres]:
+            matching_genre = next(g for g in all_genres if g.lower() == synonym)
+            return {'type': 'genre', 'word': matching_genre}
+    
+    # Final check for partial matches with synonyms
+    for synonym in synonyms:
+        for emotion in all_emotions:
+            if synonym in emotion.lower() or emotion.lower() in synonym:
+                return {'type': 'emotion', 'word': emotion}
+        
+        for genre in all_genres:
+            if synonym in genre.lower() or genre.lower() in synonym:
+                return {'type': 'genre', 'word': genre}
     
     # Default fallback - try to intelligently pick between joy and anticipation
     if any(word in term for term in ['excit', 'thrill', 'tense', 'grip', 'adventure']):
@@ -255,14 +199,14 @@ def find_similar_words(word, all_emotions, all_genres):
     else:
         return {'type': 'emotion', 'word': 'joy', 'is_suggestion': True}
 
-# Function to get movie recommendations based on genre or emotion
-def get_genre_emotion_recommendations(input_text, df, all_emotions, all_genres, sort_by='avg_rating', top_n=10):
+# Movie recommendation function
+def get_recommendations(input_text, df, emotion_to_genres, all_emotions, all_genres, sort_by='avg_rating', top_n=10):
     """Get movie recommendations based on genre or emotion input with accuracy scores"""
     # Normalize input
     input_text = input_text.lower().strip()
     
     # Find similar words
-    similar = find_similar_words(input_text, all_emotions, all_genres)
+    similar = find_similar_words(input_text, emotion_to_genres, all_emotions, all_genres)
     
     if similar.get('is_suggestion', False):
         st.info(f"Could not find an exact match for '{input_text}'. Suggesting movies with emotion: {similar['word']}")
@@ -312,7 +256,7 @@ def get_genre_emotion_recommendations(input_text, df, all_emotions, all_genres, 
                 all_movie_genres = genres_str
             else:
                 try:
-                    all_movie_genres = literal_eval(genres_str)
+                    all_movie_genres = eval(genres_str)
                 except:
                     all_movie_genres = str(genres_str).replace('[', '').replace(']', '').replace("'", "").split(',')
             
@@ -346,29 +290,12 @@ def get_genre_emotion_recommendations(input_text, df, all_emotions, all_genres, 
     # Return top N results with accuracy column
     return filtered_df.head(top_n)[['movie_name', 'avg_rating', 'avg_sentiment_score', 'genres', 'emotion', 'accuracy']]
 
-# Main function
-def main():
-    # Title and description
-    st.title("🎬 Movie Recommendation System")
-    st.markdown("""
-    This app recommends movies based on your preferred genre or mood. Just type what you're looking for, 
-    whether it's a specific genre like 'Comedy' or an emotion like 'Happy', 'Sad', or 'Exciting'.
-    """)
-    
-    # Load data
-    df = load_data()
-    
-    # Extract all unique emotions and genres
-    all_emotions = list(set(df['emotion'].str.lower()))
-    
-    all_genres = set()
-    for genres in df['genres_processed']:
-        for genre in genres:
-            all_genres.add(str(genre).replace("'", "").strip())
-    all_genres = list(all_genres)
-    
-    # Create emotion to genre mapping
+# Create emotion to genre mapping based on the dataset
+def create_emotion_genre_mapping(df):
+    """Create a mapping of emotions to common genres based on the dataset"""
     emotion_to_genres = {}
+    
+    # Process through each movie
     for idx, row in df.iterrows():
         emotion = row['emotion'].lower()
         if emotion not in emotion_to_genres:
@@ -388,186 +315,142 @@ def main():
     # Sort each emotion's genres by frequency
     for emotion in emotion_to_genres:
         emotion_to_genres[emotion] = {k: v for k, v in 
-                                    sorted(emotion_to_genres[emotion].items(), 
-                                        key=lambda item: item[1], 
-                                        reverse=True)}
+                                     sorted(emotion_to_genres[emotion].items(), 
+                                            key=lambda item: item[1], 
+                                            reverse=True)}
     
-    # Sidebar for input controls
-    st.sidebar.header("What kind of movie are you looking for?")
+    return emotion_to_genres
+
+# Extract all unique emotions and genres from the dataset
+def extract_emotions_and_genres(df):
+    """Extract all unique emotions and genres from the dataset"""
+    all_emotions = list(set(df['emotion'].str.lower()))
     
-    # Input for genre or emotion
-    user_input = st.sidebar.text_input("Enter a genre (e.g., 'Comedy') or emotion (e.g., 'Happy', 'Sad', 'Exciting')")
+    all_genres = set()
+    for genres in df['genres_processed']:
+        for genre in genres:
+            all_genres.add(str(genre).replace("'", "").strip())
     
-    # Radio button for sorting method
-    sort_method = st.sidebar.radio(
-        "Sort results by:",
-        ['Average Rating', 'Sentiment Score'],
-        horizontal=True
-    )
+    return all_emotions, list(all_genres)
+
+# App title and description
+st.title("🎬 Mood-based Movie Recommender")
+st.markdown("""
+    This app helps you find movies based on your current mood or genre preferences.
+    Simply enter how you're feeling or what kind of movie you're in the mood for!
+""")
+
+# Load data
+df = load_data()
+
+if df is not None:
+    # Create mappings
+    emotion_to_genres = create_emotion_genre_mapping(df)
+    all_emotions, all_genres = extract_emotions_and_genres(df)
+
+    # Display available emotions and genres
+    with st.expander("Show available emotions and genres"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Available Emotions")
+            st.write(", ".join(sorted(all_emotions)))
+            
+        with col2:
+            st.subheader("Top Genres")
+            st.write(", ".join(sorted(all_genres)[:20]))
     
-    sort_by = 'avg_rating' if sort_method == 'Average Rating' else 'avg_sentiment_score'
+    # Input for user's mood or genre preference
+    st.subheader("What kind of movie are you looking for today?")
+    user_input = st.text_input("Enter your mood or a genre (e.g., 'happy', 'exciting', 'comedy', 'sci-fi')", 
+                              placeholder="Type how you're feeling or what genre you want to watch...")
     
-    # Add information about available options
-    with st.sidebar.expander("Available Emotions"):
-        st.write(", ".join(sorted(all_emotions)))
+    # Sorting preference
+    sort_option = st.radio("Sort recommendations by:", ["Rating", "Emotional Impact"], horizontal=True)
+    sort_by = 'avg_rating' if sort_option == "Rating" else 'avg_sentiment_score'
     
-    with st.sidebar.expander("Available Genres"):
-        st.write(", ".join(sorted(all_genres)))
+    # Number of recommendations
+    num_recs = st.slider("Number of recommendations:", 5, 20, 10)
     
-    # Show example emotions and their top genres
-    with st.sidebar.expander("Top genres for each emotion"):
-        for emotion, genres in emotion_to_genres.items():
-            top_genres = list(genres.keys())[:3]
-            st.write(f"- {emotion}: {', '.join(top_genres)}")
-    
-    # Get recommendations when the user has entered input
+    # Get recommendations
     if user_input:
-        try:
-            recommendations = get_genre_emotion_recommendations(
-                user_input, df, all_emotions, all_genres, sort_by
+        with st.spinner('Finding the perfect movies for you...'):
+            recommendations = get_recommendations(
+                user_input, 
+                df, 
+                emotion_to_genres, 
+                all_emotions, 
+                all_genres, 
+                sort_by=sort_by, 
+                top_n=num_recs
+            )
+        
+        if not recommendations.empty:
+            st.subheader("Your Personalized Movie Recommendations")
+            
+            # Apply formatting to the avg_rating and avg_sentiment_score columns
+            recommendations['avg_rating'] = recommendations['avg_rating'].round(1)
+            recommendations['avg_sentiment_score'] = recommendations['avg_sentiment_score'].round(1)
+            
+            # Make genres more readable
+            recommendations['genres'] = recommendations['genres'].apply(
+                lambda x: ", ".join([g.strip("'[]") for g in eval(str(x))] if isinstance(x, str) else [g.strip("'[]") for g in x])
             )
             
-            # Display recommendations
-            st.subheader(f"Top Recommendations for '{user_input}'")
-            st.markdown(f"*Sorted by {sort_method}*")
-            
-            if recommendations.empty:
-                st.warning("No movies found matching your criteria. Try a different genre or emotion.")
-            else:
-                # Format the dataframe
-                recommendations = recommendations.reset_index(drop=True)
-                
-                # Create three columns
-                col1, col2, col3 = st.columns([4, 1, 1])
+            # Custom columns display
+            for i, row in recommendations.iterrows():
+                col1, col2, col3 = st.columns([3, 1, 1])
                 
                 with col1:
-                    st.markdown("#### Movie Title")
-                    for i, title in enumerate(recommendations['movie_name']):
-                        st.markdown(f"**{i+1}. {title}**")
+                    st.markdown(f"### {row['movie_name']}")
+                    st.markdown(f"**Genres:** {row['genres']}")
+                    st.markdown(f"**Emotion:** {row['emotion']}")
                 
                 with col2:
-                    st.markdown("#### Rating")
-                    for rating in recommendations['avg_rating']:
-                        st.markdown(f"⭐ {rating:.2f}")
+                    st.metric("Rating", f"{row['avg_rating']}/5")
+                    st.markdown(f"**Match:** {row['accuracy']}")
                 
                 with col3:
-                    st.markdown("#### Sentiment")
-                    for sentiment in recommendations['avg_sentiment_score']:
-                        st.markdown(f"😊 {sentiment:.2f}")
+                    st.metric("Emotional Impact", f"{row['avg_sentiment_score']}/5")
                 
-                # Show detailed view with genres and emotions
-                with st.expander("Show detailed information"):
-                    # Convert genres column to a more readable format
-                    recommendations['genres_display'] = recommendations['genres'].apply(
-                        lambda x: ", ".join([g.strip().replace("'", "") for g in str(x).replace('[', '').replace(']', '').split(',')])
-                    )
-                    
-                    # Select and rename columns for display
-                    display_df = recommendations[['movie_name', 'avg_rating', 'avg_sentiment_score', 'genres_display', 'emotion', 'accuracy']]
-                    display_df = display_df.rename(columns={
-                        'movie_name': 'Movie Title',
-                        'avg_rating': 'Rating',
-                        'avg_sentiment_score': 'Sentiment Score',
-                        'genres_display': 'Genres',
-                        'emotion': 'Emotion',
-                        'accuracy': 'Match Accuracy'
-                    })
-                    
-                    st.dataframe(display_df, hide_index=True)
+                st.divider()
                 
-                # Visualize the ratings distribution
-                with st.expander("Rating Distribution"):
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    
-                    bars = ax.bar(
-                        recommendations['movie_name'], 
-                        recommendations['avg_rating'], 
-                        alpha=0.7, 
-                        color='skyblue', 
-                        label='Rating'
-                    )
-                    
-                    # Add sentiment score line
-                    ax2 = ax.twinx()
-                    ax2.plot(
-                        recommendations['movie_name'], 
-                        recommendations['avg_sentiment_score'], 
-                        'o-', 
-                        color='orange', 
-                        label='Sentiment'
-                    )
-                    
-                    # Add labels and legend
-                    ax.set_xlabel('Movie Title')
-                    ax.set_ylabel('Rating', color='skyblue')
-                    ax2.set_ylabel('Sentiment Score', color='orange')
-                    ax.set_title(f'Rating and Sentiment Scores for Top {len(recommendations)} Movies')
-                    
-                    # Rotate x-axis labels
-                    plt.xticks(rotation=45, ha='right')
-                    
-                    # Add both legends
-                    ax.legend(loc='upper left')
-                    ax2.legend(loc='upper right')
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-        
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        else:
+            st.warning("No movies found matching your criteria. Try a different mood or genre.")
     
-    else:
-        # Show overview when no input is provided
-        st.subheader("How it works")
-        st.markdown("""
-        This recommendation system suggests movies based on:
-        
-        1. **Genres** - Enter a specific genre like "Comedy", "Action", or "Romance"
-        2. **Emotions** - Or enter how you want to feel, like "Happy", "Excited", or "Surprised"
-        
-        The system analyzes movie ratings and sentiment scores from reviews to find the perfect match for your mood.
-        
-        **Try it now!** Enter a genre or emotion in the sidebar.
-        """)
-        
-        # Show sample visualization of emotions and genres
-        st.subheader("Emotions and their common genres")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        # Prepare data for visualization
-        emotions = []
-        top_genres = []
-        
-        for emotion, genres in emotion_to_genres.items():
-            emotions.append(emotion)
-            top_genre = list(genres.keys())[0] if genres else "Unknown"
-            top_genres.append(top_genre)
-        
-        # Create visualization
-        bars = ax.bar(emotions, [1] * len(emotions), alpha=0.7)
-        
-        # Add genre labels to bars
-        for i, bar in enumerate(bars):
-            ax.text(
-                bar.get_x() + bar.get_width()/2,
-                0.5,
-                top_genres[i],
-                ha='center',
-                va='center',
-                rotation=0,
-                color='black',
-                fontweight='bold'
-            )
-        
-        # Remove y-axis
-        ax.set_yticks([])
-        ax.set_ylabel('')
-        
-        # Set title
-        ax.set_title('Top Genre for Each Emotion')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+    # Mood exploration section
+    st.subheader("Explore by Mood")
+    mood_cols = st.columns(4)
+    moods = ['Happy', 'Sad', 'Excited', 'Scared']
+    mood_descriptions = [
+        "Feel-good movies to lift your spirits",
+        "Emotional films when you need a good cry",
+        "Thrilling adventures to get your heart racing", 
+        "Frightening tales for when you want to be scared"
+    ]
+    
+    for i, (col, mood, desc) in enumerate(zip(mood_cols, moods, mood_descriptions)):
+        with col:
+            st.button(f"😀 {mood}", key=f"mood_{i}", help=desc, 
+                     on_click=lambda m=mood: st.session_state.update({'user_input': m}))
+    
+    # Genre exploration section
+    st.subheader("Explore by Genre")
+    genre_cols = st.columns(4)
+    genres = ['Comedy', 'Drama', 'Action', 'Romance']
+    
+    for i, (col, genre) in enumerate(zip(genre_cols, genres)):
+        with col:
+            st.button(genre, key=f"genre_{i}", 
+                     on_click=lambda g=genre: st.session_state.update({'user_input': g}))
 
-if __name__ == "__main__":
-    main()
+else:
+    st.error("Failed to load the movie dataset. Please check if the file exists.")
+
+# Footer
+st.markdown("---")
+st.markdown("Movie Recommender App powered by NLP and emotional analysis")
+
+# Update user input field if mood or genre button is clicked
+if 'user_input' in st.session_state:
+    st.experimental_rerun()

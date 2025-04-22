@@ -11,7 +11,7 @@ except LookupError:
     
 # Set page config for app
 st.set_page_config(
-    page_title="Mood-based Movie Recommender",
+    page_title="Movie Recommender",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -31,7 +31,7 @@ def load_data():
 
 # Function to find similar words
 def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
-    """Find similar words to the input using pre-defined mappings and WordNet"""
+    """Find similar words"""
     word = word.lower().strip()
     
     # Direct matches
@@ -422,7 +422,7 @@ if df is not None:
                 st.divider()
                 
         else:
-            st.warning("No movies found matching your criteria. Try a different mood or genre.")
+            st.warning("No movies found matching your criteria. Try a different emotion or genre.")
     
     # Mood exploration section
     st.subheader("Explore by Mood")
@@ -455,7 +455,7 @@ else:
 
 # Footer
 st.markdown("---")
-st.markdown("Movie Recommender App powered by NLP and emotional analysis")
+st.markdown("Movie Recommender App powered by NLP and sentiment analysis")
 
 # Update user input field if mood or genre button is clicked
 if 'user_input' in st.session_state:

@@ -31,13 +31,16 @@ def load_data():
         # Track loaded files for user information
         loaded_files = []
         missing_files = []
+        total_rows_loaded = 0
         
         # Try to load each file and concatenate
         for file_name in data_files:
             try:
                 part_df = pd.read_csv(file_name)
+                rows_in_file = len(part_df)
+                total_rows_loaded += rows_in_file
                 combined_df = pd.concat([combined_df, part_df], ignore_index=True)
-                loaded_files.append(file_name)
+                loaded_files.append(f"{file_name} ({rows_in_file} rows)")
             except FileNotFoundError:
                 missing_files.append(file_name)
                 continue
@@ -53,6 +56,7 @@ def load_data():
         if loaded_files:
             file_list = ", ".join(loaded_files)
             st.success(f"Successfully loaded data from: {file_list}")
+            st.info(f"Total rows loaded across all files: {total_rows_loaded}")
         
         if missing_files:
             file_list = ", ".join(missing_files)
@@ -61,8 +65,7 @@ def load_data():
         # Convert string representation of lists to actual lists
         combined_df['genres_processed'] = combined_df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
         
-        # Remove any duplicates that might have been in multiple files
-        combined_df = combined_df.drop_duplicates(subset=['movie_name'])
+        # Note: We're intentionally NOT removing duplicates to preserve all data
         
         return combined_df
     except Exception as e:

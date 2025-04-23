@@ -17,16 +17,27 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load the preprocessed data
+# Load the preprocessed data from multiple files
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('Demo2.csv')
+        # List of your split CSV files
+        file_parts = ['Demo2_part1.csv', 'Demo2_part2.csv']
+        
+        # Initialize an empty DataFrame
+        df = pd.DataFrame()
+        
+        # Loop through each file and concatenate
+        for file_path in file_parts:
+            part_df = pd.read_csv(file_path)
+            df = pd.concat([df, part_df], ignore_index=True)
+        
         # Convert string representation of lists to actual lists
         df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
+        
         return df
-    except:
-        st.error("Failed to load data. Please make sure 'movie_sentiment_summary.csv' is in the same directory as this app.")
+    except Exception as e:
+        st.error(f"Failed to load data: {e}. Please make sure all CSV parts are in the same directory as this app.")
         return None
 
 # Function to find similar words
@@ -346,10 +357,44 @@ st.markdown("""
     Simply enter how you're feeling or what kind of movie you're in the mood for!
 """)
 
-# Load data
-df = load_data()
+# Add file selection widget for advanced users
+with st.expander("Advanced Settings"):
+    st.subheader("Data Files")
+    st.info("This app uses multiple CSV files for the movie database. By default, it loads 'Demo2_part1.csv' and 'Demo2_part2.csv'.")
+    
+    # Option to upload custom CSV files
+    use_custom_files = st.checkbox("Use custom CSV files")
+    
+    if use_custom_files:
+        uploaded_files = st.file_uploader("Upload your CSV file(s)", type="csv", accept_multiple_files=True)
+        
+        if uploaded_files:
+            # Override the load_data function
+            @st.cache_data
+            def load_custom_data(uploaded_files):
+                # Initialize an empty DataFrame
+                custom_df = pd.DataFrame()
+                
+                # Process each uploaded file
+                for file in uploaded_files:
+                    part_df = pd.read_csv(file)
+                    custom_df = pd.concat([custom_df, part_df], ignore_index=True)
+                
+                # Convert string representation of lists to actual lists
+                custom_df['genres_processed'] = custom_df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
+                
+                return custom_df
+            
+            df = load_custom_data(uploaded_files)
+            st.success(f"Successfully loaded {len(uploaded_files)} custom file(s) with a total of {len(df)} movie records.")
+    else:
+        # Load data from default files
+        df = load_data()
 
 if df is not None:
+    # Display dataset summary
+    st.info(f"Movie database loaded successfully: {len(df)} movies total")
+    
     # Create mappings
     emotion_to_genres = create_emotion_genre_mapping(df)
     all_emotions, all_genres = extract_emotions_and_genres(df)
@@ -415,7 +460,6 @@ if df is not None:
                 
                 with col2:
                     st.metric("Typical Rating", f"{row['avg_rating']}/5")
-                    #st.markdown(f"**Match:** {row['accuracy']}") 
                 
                 with col3:
                     st.metric("Sentiment Score", f"{row['avg_sentiment_score']}/5")
@@ -425,8 +469,6 @@ if df is not None:
         else:
             st.warning("No movies found matching your criteria. Try a different emotion or genre.")
     
-    
-
 # Footer
 st.markdown("---")
 st.markdown("Movie Recommender App powered by NLP and sentiment analysis")

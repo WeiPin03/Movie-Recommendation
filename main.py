@@ -21,13 +21,18 @@ st.set_page_config(
 # Load the preprocessed data
 @st.cache_data
 def load_data():
+    datasets = {}
     try:
-        df = pd.read_csv('Demo2.csv')
-        # Convert string representation of lists to actual lists
-        df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
-        return df
-    except:
-        st.error("Failed to load data. Please make sure 'Demo1.csv' is in the same directory as this app.")
+        # Load all four datasets
+        for i in range(1, 5):
+            file_name = f'Demo{i}.csv'
+            df = pd.read_csv(file_name)
+            # Convert string representation of lists to actual lists
+            df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
+            datasets[file_name] = df
+        return datasets
+    except Exception as e:
+        st.error(f"Failed to load data: {e}. Please make sure 'Demo1.csv' through 'Demo4.csv' are in the same directory as this app.")
         return None
 
 # Function to find similar words
@@ -340,6 +345,12 @@ def extract_emotions_and_genres(df):
     
     return all_emotions, list(all_genres)
 
+# Function to merge multiple datasets
+def merge_datasets(datasets):
+    """Merge multiple datasets into one"""
+    merged_df = pd.concat(datasets.values(), ignore_index=True)
+    return merged_df
+
 # App title and description
 st.title("🎬 Movie Recommendation System")
 st.markdown("""
@@ -347,10 +358,28 @@ st.markdown("""
     Simply enter how you're feeling or what kind of movie you're in the mood for!
 """)
 
-# Load data
-df = load_data()
+# Load datasets
+datasets = load_data()
 
-if df is not None:
+if datasets is not None:
+    # Dataset selection
+    st.sidebar.title("Dataset Selection")
+    dataset_options = list(datasets.keys())
+    dataset_options.append("All Datasets")
+    selected_dataset = st.sidebar.selectbox(
+        "Choose dataset to use for recommendations:",
+        dataset_options,
+        index=len(dataset_options)-1  # Default to "All Datasets"
+    )
+    
+    # Get the selected dataset
+    if selected_dataset == "All Datasets":
+        df = merge_datasets(datasets)
+        st.sidebar.success(f"Using combined data from all datasets: {len(df)} movies total")
+    else:
+        df = datasets[selected_dataset]
+        st.sidebar.success(f"Using {selected_dataset}: {len(df)} movies")
+    
     # Create mappings
     emotion_to_genres = create_emotion_genre_mapping(df)
     all_emotions, all_genres = extract_emotions_and_genres(df)
@@ -374,10 +403,27 @@ if df is not None:
     
     # Sorting preference
     sort_option = st.radio("Sort recommendations by:", ["Typical Rating", "Sentiment Score"], horizontal=True)
-    sort_by = 'avg_rating' if sort_option == "Rating" else 'avg_sentiment_score'
+    sort_by = 'avg_rating' if sort_option == "Typical Rating" else 'avg_sentiment_score'
     
     # Number of recommendations
     num_recs = st.slider("Number of recommendations:", 5, 20, 10)
+    
+    # Dataset statistics
+    with st.sidebar.expander("Dataset Statistics"):
+        if selected_dataset == "All Datasets":
+            for dataset_name, dataset in datasets.items():
+                st.write(f"{dataset_name}: {len(dataset)} movies")
+                
+            # Show overlap statistics
+            st.subheader("Unique Movies Across Datasets")
+            all_movies = set()
+            for dataset in datasets.values():
+                all_movies.update(dataset['movie_name'].unique())
+            st.write(f"Total unique movies: {len(all_movies)}")
+        else:
+            st.write(f"Number of movies: {len(df)}")
+            st.write(f"Number of unique emotions: {len(all_emotions)}")
+            st.write(f"Number of unique genres: {len(all_genres)}")
     
     # Get recommendations
     if user_input:
@@ -393,7 +439,7 @@ if df is not None:
             )
         
         if not recommendations.empty:
-            st.subheader("Your Personalized Movie Recommendations sorted by", sort_by)
+            st.subheader(f"Your Personalized Movie Recommendations (sorted by {sort_option})")
             
             # Apply formatting to the avg_rating and avg_sentiment_score columns
             recommendations['avg_rating'] = recommendations['avg_rating'].round(1)
@@ -404,6 +450,20 @@ if df is not None:
                 lambda x: ", ".join([g.strip("'[]") for g in eval(str(x))] if isinstance(x, str) else [g.strip("'[]") for g in x])
             )
             
+            # Add a "Source Dataset" column if using all datasets
+            if selected_dataset == "All Datasets":
+                # Create a mapping of movie names to their source dataset
+                movie_to_source = {}
+                for dataset_name, dataset in datasets.items():
+                    for movie in dataset['movie_name'].unique():
+                        if movie in movie_to_source:
+                            movie_to_source[movie] += f", {dataset_name}"
+                        else:
+                            movie_to_source[movie] = dataset_name
+                
+                # Add source dataset to recommendations
+                recommendations['source'] = recommendations['movie_name'].map(movie_to_source)
+            
             # Custom columns display
             for i, row in recommendations.iterrows():
                 col1, col2, col3 = st.columns([3, 1, 1])
@@ -413,11 +473,12 @@ if df is not None:
                     st.markdown(f"**Genres:** {row['genres']}")
                     st.markdown(f"**Emotion:** {row['emotion']}")
                     st.markdown(f"**Match:** {row['accuracy']}")
+                    if selected_dataset == "All Datasets" and 'source' in row:
+                        st.markdown(f"**Source:** {row['source']}")
                 
                 with col2:
                     st.metric("Rating", f"{row['avg_rating']}/5")
                     
-                
                 with col3:
                     st.metric("Emotional Impact", f"{row['avg_sentiment_score']}/5")
                 
@@ -426,7 +487,6 @@ if df is not None:
         else:
             st.warning("No movies found matching your criteria. Try a different mood or genre.")
     
-
 # Footer
 st.markdown("---")
 st.markdown("Movie Recommender App powered by NLP and emotional analysis")

@@ -414,11 +414,11 @@ if df is not None:
                     st.markdown(f"**Match:** {row['accuracy']}") 
                 
                 with col2:
-                    st.metric("Rating", f"{row['avg_rating']}/5")
+                    st.metric("Typical Rating", f"{row['avg_rating']}/5")
                     #st.markdown(f"**Match:** {row['accuracy']}") 
                 
                 with col3:
-                    st.metric("Emotional Impact", f"{row['avg_sentiment_score']}/5")
+                    st.metric("Sentiment Score", f"{row['avg_sentiment_score']}/5")
                 
                 st.divider()
                 

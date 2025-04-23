@@ -574,6 +574,6 @@ st.markdown("---")
 st.markdown("Movie Recommender App powered by NLP and emotional analysis")
 
 # Initialize session state for user input if it doesn't exist
-if 'user_input' in st.session_state.user_input:
+if 'user_input' in st.session_state and user_input != st.session_state.user_input:
     user_input = st.session_state.user_input
-    st.experimental_rerun()state and user_input != st.session_
+    st.experimental_rerun()

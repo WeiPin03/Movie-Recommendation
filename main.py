@@ -22,7 +22,7 @@ st.set_page_config(
 def load_data():
     try:
         # List of your split CSV files
-        file_parts = ['Demo2_part1.csv', 'Demo2_part2.csv']
+        file_parts = ['Demo1.csv', 'Demo2.csv', 'Demo3.csv', 'Demo4.csv']
         
         # Initialize an empty DataFrame
         df = pd.DataFrame()

@@ -4,11 +4,12 @@ import numpy as np
 import nltk
 from nltk.corpus import wordnet
 
+# Download wordnet if not already downloaded
 try:
     wordnet.synsets('test')
 except LookupError:
     nltk.download('wordnet')
-    
+
 # Set page config for app
 st.set_page_config(
     page_title="Movie Recommender",
@@ -17,32 +18,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load the preprocessed data from multiple files
+# Load the preprocessed data
 @st.cache_data
 def load_data():
     try:
-        # List of your split CSV files
-        file_parts = ['Demo1.csv', 'Demo2.csv', 'Demo3.csv', 'Demo4.csv']
-        
-        # Initialize an empty DataFrame
-        df = pd.DataFrame()
-        
-        # Loop through each file and concatenate
-        for file_path in file_parts:
-            part_df = pd.read_csv(file_path)
-            df = pd.concat([df, part_df], ignore_index=True)
-        
+        df = pd.read_csv('Demo1.csv')
         # Convert string representation of lists to actual lists
         df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
-        
         return df
-    except Exception as e:
-        st.error(f"Failed to load data: {e}. Please make sure all CSV parts are in the same directory as this app.")
+    except:
+        st.error("Failed to load data. Please make sure 'Demo1.csv' is in the same directory as this app.")
         return None
 
 # Function to find similar words
 def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
-    """Find similar words"""
+    """Find similar words to the input using pre-defined mappings and WordNet"""
     word = word.lower().strip()
     
     # Direct matches
@@ -218,7 +208,7 @@ def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
 
 # Movie recommendation function
 def get_recommendations(input_text, df, emotion_to_genres, all_emotions, all_genres, sort_by='avg_rating', top_n=10):
-    """Get movie recommendations based on genre or emotion input with accuracy scores"""
+
     # Normalize input
     input_text = input_text.lower().strip()
     
@@ -351,50 +341,16 @@ def extract_emotions_and_genres(df):
     return all_emotions, list(all_genres)
 
 # App title and description
-st.title("🎬 Movie Recommendation System")
+st.title("🎬 Mood-based Movie Recommender")
 st.markdown("""
     This app helps you find movies based on your current mood or genre preferences.
     Simply enter how you're feeling or what kind of movie you're in the mood for!
 """)
 
-# Add file selection widget for advanced users
-with st.expander("Advanced Settings"):
-    st.subheader("Data Files")
-    st.info("This app uses multiple CSV files for the movie database. By default, it loads 'Demo2_part1.csv' and 'Demo2_part2.csv'.")
-    
-    # Option to upload custom CSV files
-    use_custom_files = st.checkbox("Use custom CSV files")
-    
-    if use_custom_files:
-        uploaded_files = st.file_uploader("Upload your CSV file(s)", type="csv", accept_multiple_files=True)
-        
-        if uploaded_files:
-            # Override the load_data function
-            @st.cache_data
-            def load_custom_data(uploaded_files):
-                # Initialize an empty DataFrame
-                custom_df = pd.DataFrame()
-                
-                # Process each uploaded file
-                for file in uploaded_files:
-                    part_df = pd.read_csv(file)
-                    custom_df = pd.concat([custom_df, part_df], ignore_index=True)
-                
-                # Convert string representation of lists to actual lists
-                custom_df['genres_processed'] = custom_df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
-                
-                return custom_df
-            
-            df = load_custom_data(uploaded_files)
-            st.success(f"Successfully loaded {len(uploaded_files)} custom file(s) with a total of {len(df)} movie records.")
-    else:
-        # Load data from default files
-        df = load_data()
+# Load data
+df = load_data()
 
 if df is not None:
-    # Display dataset summary
-    st.info(f"Movie database loaded successfully: {len(df)} movies total")
-    
     # Create mappings
     emotion_to_genres = create_emotion_genre_mapping(df)
     all_emotions, all_genres = extract_emotions_and_genres(df)
@@ -414,10 +370,10 @@ if df is not None:
     # Input for user's mood or genre preference
     st.subheader("What kind of movie are you looking for today?")
     user_input = st.text_input("Enter your mood or a genre (e.g., 'happy', 'exciting', 'comedy', 'sci-fi')", 
-                              placeholder="Type what emotion or what genre you want to watch...")
+                              placeholder="Type how you're feeling or what genre you want to watch...")
     
     # Sorting preference
-    sort_option = st.radio("Sort recommendations by:", ["Rating", "Sentiment Score"], horizontal=True)
+    sort_option = st.radio("Sort recommendations by:", ["Rating", "Emotional Impact"], horizontal=True)
     sort_by = 'avg_rating' if sort_option == "Rating" else 'avg_sentiment_score'
     
     # Number of recommendations
@@ -456,23 +412,57 @@ if df is not None:
                     st.markdown(f"### {row['movie_name']}")
                     st.markdown(f"**Genres:** {row['genres']}")
                     st.markdown(f"**Emotion:** {row['emotion']}")
-                    st.markdown(f"**Match:** {row['accuracy']}") 
                 
                 with col2:
-                    st.metric("Typical Rating", f"{row['avg_rating']}/5")
+                    st.metric("Rating", f"{row['avg_rating']}/5")
+                    st.markdown(f"**Match:** {row['accuracy']}")
                 
                 with col3:
-                    st.metric("Sentiment Score", f"{row['avg_sentiment_score']}/5")
+                    st.metric("Emotional Impact", f"{row['avg_sentiment_score']}/5")
                 
                 st.divider()
                 
         else:
-            st.warning("No movies found matching your criteria. Try a different emotion or genre.")
+            st.warning("No movies found matching your criteria. Try a different mood or genre.")
     
+    # Mood exploration section
+    st.subheader("Explore by Mood")
+    mood_cols = st.columns(4)
+    moods = ['Happy', 'Sad', 'Excited', 'Scared']
+    mood_descriptions = [
+        "Feel-good movies to lift your spirits",
+        "Emotional films when you need a good cry",
+        "Thrilling adventures to get your heart racing", 
+        "Frightening tales for when you want to be scared"
+    ]
+    
+    # Create mood buttons
+    for i, (col, mood, desc) in enumerate(zip(mood_cols, moods, mood_descriptions)):
+        with col:
+            if st.button(f"😀 {mood}", key=f"mood_{i}", help=desc):
+                st.session_state.user_input = mood
+                st.experimental_rerun()
+    
+    # Genre exploration section
+    st.subheader("Explore by Genre")
+    genre_cols = st.columns(4)
+    genres = ['Comedy', 'Drama', 'Action', 'Romance']
+    
+    # Create genre buttons
+    for i, (col, genre) in enumerate(zip(genre_cols, genres)):
+        with col:
+            if st.button(genre, key=f"genre_{i}"):
+                st.session_state.user_input = genre
+                st.experimental_rerun()
+
+else:
+    st.error("Failed to load the movie dataset. Please check if the file exists.")
+
 # Footer
 st.markdown("---")
-st.markdown("Movie Recommender App powered by NLP and sentiment analysis")
+st.markdown("Movie Recommender App powered by NLP and emotional analysis")
 
-# Update user input field if mood or genre button is clicked
-if 'user_input' in st.session_state:
+# Initialize session state for user input if it doesn't exist
+if 'user_input' in st.session_state and user_input != st.session_state.user_input:
+    user_input = st.session_state.user_input
     st.experimental_rerun()

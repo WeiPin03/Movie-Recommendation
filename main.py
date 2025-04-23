@@ -425,34 +425,7 @@ if df is not None:
         else:
             st.warning("No movies found matching your criteria. Try a different emotion or genre.")
     
-    # Mood exploration section
-    st.subheader("Explore by Mood")
-    mood_cols = st.columns(4)
-    moods = ['Happy', 'Sad', 'Excited', 'Scared']
-    mood_descriptions = [
-        "Feel-good movies to lift your spirits",
-        "Emotional films when you need a good cry",
-        "Thrilling adventures to get your heart racing", 
-        "Frightening tales for when you want to be scared"
-    ]
     
-    for i, (col, mood, desc) in enumerate(zip(mood_cols, moods, mood_descriptions)):
-        with col:
-            st.button(f"😀 {mood}", key=f"mood_{i}", help=desc, 
-                     on_click=lambda m=mood: st.session_state.update({'user_input': m}))
-    
-    # Genre exploration section
-    st.subheader("Explore by Genre")
-    genre_cols = st.columns(4)
-    genres = ['Comedy', 'Drama', 'Action', 'Romance']
-    
-    for i, (col, genre) in enumerate(zip(genre_cols, genres)):
-        with col:
-            st.button(genre, key=f"genre_{i}", 
-                     on_click=lambda g=genre: st.session_state.update({'user_input': g}))
-
-else:
-    st.error("Failed to load the movie dataset. Please check if the file exists.")
 
 # Footer
 st.markdown("---")

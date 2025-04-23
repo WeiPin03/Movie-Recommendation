@@ -18,16 +18,55 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load the preprocessed data
+# Load the preprocessed data from multiple files
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('Demo1.csv')
+        # List all data files to be loaded
+        data_files = ['Demo1.csv', 'Demo2.csv', 'Demo3.csv', 'Demo4.csv']
+        
+        # Initialize an empty DataFrame
+        combined_df = pd.DataFrame()
+        
+        # Track loaded files for user information
+        loaded_files = []
+        missing_files = []
+        
+        # Try to load each file and concatenate
+        for file_name in data_files:
+            try:
+                part_df = pd.read_csv(file_name)
+                combined_df = pd.concat([combined_df, part_df], ignore_index=True)
+                loaded_files.append(file_name)
+            except FileNotFoundError:
+                missing_files.append(file_name)
+                continue
+            except Exception as e:
+                st.error(f"Error loading {file_name}: {str(e)}")
+                continue
+        
+        if not loaded_files:
+            st.error("Could not load any data files. Please check that at least one of the required CSV files (Demo1.csv, Demo2.csv, etc.) is in the same directory as this app.")
+            return None
+        
+        # Display info about which files were loaded
+        if loaded_files:
+            file_list = ", ".join(loaded_files)
+            st.success(f"Successfully loaded data from: {file_list}")
+        
+        if missing_files:
+            file_list = ", ".join(missing_files)
+            st.warning(f"Could not find the following files: {file_list}. The app will continue with available data.")
+        
         # Convert string representation of lists to actual lists
-        df['genres_processed'] = df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
-        return df
-    except:
-        st.error("Failed to load data. Please make sure 'Demo1.csv' is in the same directory as this app.")
+        combined_df['genres_processed'] = combined_df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
+        
+        # Remove any duplicates that might have been in multiple files
+        combined_df = combined_df.drop_duplicates(subset=['movie_name'])
+        
+        return combined_df
+    except Exception as e:
+        st.error(f"An error occurred while loading data: {str(e)}")
         return None
 
 # Function to find similar words
@@ -208,7 +247,7 @@ def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
 
 # Movie recommendation function
 def get_recommendations(input_text, df, emotion_to_genres, all_emotions, all_genres, sort_by='avg_rating', top_n=10):
-
+    """Get movie recommendations based on genre or emotion input with accuracy scores"""
     # Normalize input
     input_text = input_text.lower().strip()
     
@@ -351,6 +390,9 @@ st.markdown("""
 df = load_data()
 
 if df is not None:
+    # Show dataset size information
+    st.info(f"Total movies in the database: {len(df)}")
+    
     # Create mappings
     emotion_to_genres = create_emotion_genre_mapping(df)
     all_emotions, all_genres = extract_emotions_and_genres(df)
@@ -373,7 +415,7 @@ if df is not None:
                               placeholder="Type how you're feeling or what genre you want to watch...")
     
     # Sorting preference
-    sort_option = st.radio("Sort recommendations by:", ["Typical Rating", "Sentiment Score"], horizontal=True)
+    sort_option = st.radio("Sort recommendations by:", ["Rating", "Sentiment Score"], horizontal=True)
     sort_by = 'avg_rating' if sort_option == "Rating" else 'avg_sentiment_score'
     
     # Number of recommendations
@@ -393,7 +435,7 @@ if df is not None:
             )
         
         if not recommendations.empty:
-            st.subheader("Your Personalized Movie Recommendations sorted by", sort_by)
+            st.subheader(f"Your Personalized Movie Recommendations (sorted by {sort_option})")
             
             # Apply formatting to the avg_rating and avg_sentiment_score columns
             recommendations['avg_rating'] = recommendations['avg_rating'].round(1)

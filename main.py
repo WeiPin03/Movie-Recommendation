@@ -341,7 +341,7 @@ def extract_emotions_and_genres(df):
     return all_emotions, list(all_genres)
 
 # App title and description
-st.title("🎬 Mood-based Movie Recommender")
+st.title("🎬 Movie Recommendation System")
 st.markdown("""
     This app helps you find movies based on your current mood or genre preferences.
     Simply enter how you're feeling or what kind of movie you're in the mood for!
@@ -360,7 +360,7 @@ if df is not None:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Available Emotions")
+            st.subheader("Available Sentiments")
             st.write(", ".join(sorted(all_emotions)))
             
         with col2:
@@ -369,11 +369,11 @@ if df is not None:
     
     # Input for user's mood or genre preference
     st.subheader("What kind of movie are you looking for today?")
-    user_input = st.text_input("Enter your mood or a genre (e.g., 'happy', 'exciting', 'comedy', 'sci-fi')", 
+    user_input = st.text_input("Enter sentiment or a genre (e.g., 'happy', 'exciting', 'comedy', 'sci-fi')", 
                               placeholder="Type how you're feeling or what genre you want to watch...")
     
     # Sorting preference
-    sort_option = st.radio("Sort recommendations by:", ["Rating", "Emotional Impact"], horizontal=True)
+    sort_option = st.radio("Sort recommendations by:", ["Typical Rating", "Sentiment Score"], horizontal=True)
     sort_by = 'avg_rating' if sort_option == "Rating" else 'avg_sentiment_score'
     
     # Number of recommendations
@@ -393,7 +393,7 @@ if df is not None:
             )
         
         if not recommendations.empty:
-            st.subheader("Your Personalized Movie Recommendations")
+            st.subheader("Your Personalized Movie Recommendations sorted by", sort_by)
             
             # Apply formatting to the avg_rating and avg_sentiment_score columns
             recommendations['avg_rating'] = recommendations['avg_rating'].round(1)

@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 import nltk
+import os
 from nltk.corpus import wordnet
 
 # Download wordnet if not already downloaded
@@ -18,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load the preprocessed data from multiple files
+# Improved load_data function with better CSV handling
 @st.cache_data
 def load_data():
     try:
@@ -31,19 +32,62 @@ def load_data():
         # Track loaded files for user information
         loaded_files = []
         missing_files = []
-        total_rows_loaded = 0
+        expected_rows = {'Demo1.csv': 608, 'Demo2.csv': 637, 'Demo3.csv': 662, 'Demo4.csv': 102}
+        row_counts = {}
         
         # Try to load each file and concatenate
         for file_name in data_files:
             try:
-                part_df = pd.read_csv(file_name)
+                # Check if file exists
+                if not os.path.exists(file_name):
+                    missing_files.append(file_name)
+                    continue
+                
+                # Try different loading parameters for maximum compatibility
+                try:
+                    # First try standard loading
+                    part_df = pd.read_csv(file_name)
+                except Exception as e1:
+                    try:
+                        # Try with explicit encoding
+                        part_df = pd.read_csv(file_name, encoding='utf-8')
+                    except Exception as e2:
+                        try:
+                            # Try with Latin-1 encoding
+                            part_df = pd.read_csv(file_name, encoding='latin-1')
+                        except Exception as e3:
+                            try:
+                                # Try with error handling
+                                part_df = pd.read_csv(file_name, error_bad_lines=False, warn_bad_lines=True)
+                            except Exception as e4:
+                                # Last resort: low-level line reading
+                                from io import StringIO
+                                with open(file_name, 'r', encoding='utf-8') as f:
+                                    # Read the header
+                                    header = f.readline().strip()
+                                    
+                                    # Read the rest of the lines
+                                    data = []
+                                    for line in f:
+                                        data.append(line.strip())
+                                
+                                # Create a DataFrame from the read lines
+                                csv_data = StringIO(header + '\n' + '\n'.join(data))
+                                part_df = pd.read_csv(csv_data)
+                
+                # Record row count
                 rows_in_file = len(part_df)
-                total_rows_loaded += rows_in_file
+                row_counts[file_name] = rows_in_file
+                expected = expected_rows.get(file_name, "unknown")
+                
+                # Check if we got the expected number of rows
+                if rows_in_file < expected:
+                    st.warning(f"Warning: {file_name} loaded {rows_in_file} rows but expected {expected} rows.")
+                
+                # Add to the combined DataFrame
                 combined_df = pd.concat([combined_df, part_df], ignore_index=True)
                 loaded_files.append(f"{file_name} ({rows_in_file} rows)")
-            except FileNotFoundError:
-                missing_files.append(file_name)
-                continue
+                
             except Exception as e:
                 st.error(f"Error loading {file_name}: {str(e)}")
                 continue
@@ -56,7 +100,15 @@ def load_data():
         if loaded_files:
             file_list = ", ".join(loaded_files)
             st.success(f"Successfully loaded data from: {file_list}")
-            st.info(f"Total rows loaded across all files: {total_rows_loaded}")
+            
+            # Calculate total rows loaded and expected
+            total_loaded = sum(row_counts.values())
+            total_expected = sum(expected_rows.get(f, 0) for f in row_counts.keys())
+            
+            st.info(f"Total rows loaded across all files: {total_loaded}")
+            
+            if total_loaded < total_expected:
+                st.warning(f"Note: Expected {total_expected} total rows based on your file sizes, but loaded {total_loaded} rows.")
         
         if missing_files:
             file_list = ", ".join(missing_files)
@@ -65,14 +117,12 @@ def load_data():
         # Convert string representation of lists to actual lists
         combined_df['genres_processed'] = combined_df['genres'].apply(lambda x: eval(x) if isinstance(x, str) else x)
         
-        # Note: We're intentionally NOT removing duplicates to preserve all data
-        
         return combined_df
     except Exception as e:
         st.error(f"An error occurred while loading data: {str(e)}")
         return None
 
-# Function to find similar words
+# Function to find similar words (remaining functions unchanged)
 def find_similar_words(word, emotion_to_genres, all_emotions, all_genres):
     """Find similar words to the input using pre-defined mappings and WordNet"""
     word = word.lower().strip()
@@ -389,6 +439,54 @@ st.markdown("""
     Simply enter how you're feeling or what kind of movie you're in the mood for!
 """)
 
+# Add a button for file verification
+if st.button("Debug CSV Files"):
+    st.subheader("CSV File Details")
+    
+    # List all data files to be checked
+    data_files = ['Demo1.csv', 'Demo2.csv', 'Demo3.csv', 'Demo4.csv']
+    file_details = []
+    
+    for file_name in data_files:
+        if not os.path.exists(file_name):
+            st.warning(f"{file_name}: File not found")
+            continue
+            
+        # Get file size
+        file_size = os.path.getsize(file_name) / (1024 * 1024)  # in MB
+        
+        # Count rows using pandas
+        try:
+            df = pd.read_csv(file_name)
+            pandas_rows = len(df)
+            status = "OK"
+        except Exception as e:
+            pandas_rows = 0
+            status = f"Error: {str(e)}"
+        
+        # Count lines in file
+        try:
+            with open(file_name, 'r', encoding='utf-8') as f:
+                line_count = sum(1 for line in f)
+        except:
+            try:
+                with open(file_name, 'r', encoding='latin-1') as f:
+                    line_count = sum(1 for line in f)
+            except:
+                line_count = 0
+        
+        st.info(f"**{file_name}:**  \n"
+                f"Size: {round(file_size, 2)} MB  \n"
+                f"Rows (pandas): {pandas_rows}  \n"
+                f"Lines in file: {line_count}  \n"
+                f"Has header: {'Yes' if line_count - pandas_rows == 1 else 'No or multiple headers'}  \n"
+                f"Status: {status}")
+    
+    st.subheader("Expected Row Counts")
+    st.info("Demo1.csv: 608 rows  \nDemo2.csv: 637 rows  \nDemo3.csv: 662 rows  \nDemo4.csv: 102 rows  \nTotal: 2009 rows")
+    
+    st.markdown("---")
+
 # Load data
 df = load_data()
 
@@ -470,13 +568,12 @@ if df is not None:
                 
         else:
             st.warning("No movies found matching your criteria. Try a different mood or genre.")
-    
 
 # Footer
 st.markdown("---")
 st.markdown("Movie Recommender App powered by NLP and emotional analysis")
 
 # Initialize session state for user input if it doesn't exist
-if 'user_input' in st.session_state and user_input != st.session_state.user_input:
+if 'user_input' in st.session_state.user_input:
     user_input = st.session_state.user_input
-    st.experimental_rerun()
+    st.experimental_rerun()state and user_input != st.session_
